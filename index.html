@@ -5,24 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' https://translate.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none';">
-
 <meta name="referrer" content="no-referrer">
 
-<title>Cloud Voice Pro</title>
+<title>Cloud Voice Pro v7</title>
 
 <style>
   :root { --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --accent: #0a84ff; --danger: #ff453a; }
   
   body {
     background-color: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     margin: 0; padding: 20px;
     display: flex; flex-direction: column; height: 100vh; box-sizing: border-box;
   }
 
-  h1 { font-size: 1rem; color: #666; text-align: center; margin: 0 0 15px 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
+  h1 { font-size: 1rem; color: #888; text-align: center; margin: 0 0 15px 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
 
-  /* 操作パネル */
   .panel {
     background: var(--card); padding: 15px; border-radius: 12px;
     margin-bottom: 15px; border: 1px solid #333;
@@ -31,7 +29,6 @@
   .slider-group { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
   input[type=range] { flex-grow: 1; margin-left: 15px; cursor: pointer; }
 
-  /* テキストエリア */
   textarea {
     flex-grow: 1; width: 100%;
     background: #1c1c1e; color: #fff;
@@ -42,7 +39,6 @@
   }
   textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
 
-  /* ボタン */
   .btn-group { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
   
   button {
@@ -56,17 +52,14 @@
   #btn-play { background: var(--accent); }
   #btn-stop { background: var(--danger); }
 
-  /* ステータスバー */
-  #status { 
-    text-align: center; font-size: 13px; color: #888; margin-top: 10px; min-height: 20px; 
-  }
+  #status { text-align: center; font-size: 13px; color: #888; margin-top: 10px; min-height: 20px; }
   .active { color: #30d158 !important; }
 
 </style>
 </head>
 <body>
 
-<h1>CLOUD VOICE PRO</h1>
+<h1>CLOUD VOICE PRO v7</h1>
 
 <div class="panel">
   <div class="slider-group">
@@ -75,7 +68,7 @@
   </div>
 </div>
 
-<textarea id="text-input" placeholder="ここに長文を入力しても大丈夫です。自動的に分割してクラウドで再生します。">ここに文字を入力してください。このツールはあなたのタブレットの代わりに、Googleのサーバーを使って音声を再生します。</textarea>
+<textarea id="text-input" placeholder="ここに文章を入力してください。">こんにちは。速度設定が途中で戻らないように修正されました。</textarea>
 
 <div class="btn-group">
   <button id="btn-play">再生 (PLAY)</button>
@@ -88,7 +81,6 @@
 (function() {
   'use strict';
 
-  // --- 変数定義 ---
   const inputEl = document.getElementById('text-input');
   const btnPlay = document.getElementById('btn-play');
   const btnStop = document.getElementById('btn-stop');
@@ -97,32 +89,43 @@
   const rateVal = document.getElementById('rate-val');
 
   let audioPlayer = new Audio();
-  let chunkQueue = []; // 文章の待ち行列
+  let chunkQueue = [];
   let isPlaying = false;
   let currentChunkIndex = 0;
 
-  // --- 初期化処理 ---
-  // 自動保存の復元
+  // --- 設定の復元（LocalStorage） ---
+  
+  // テキストの復元
   if(localStorage.getItem('cloud-tts-text')) {
     inputEl.value = localStorage.getItem('cloud-tts-text');
   }
-  inputEl.addEventListener('input', () => localStorage.setItem('cloud-tts-text', inputEl.value));
+  
+  // 速度設定の復元（これ重要）
+  if(localStorage.getItem('cloud-tts-rate')) {
+    const savedRate = localStorage.getItem('cloud-tts-rate');
+    rateInput.value = savedRate;
+    rateVal.textContent = parseFloat(savedRate).toFixed(2); // 表示も更新
+  }
 
-  // 速度表示の更新
+  // 自動保存処理
+  inputEl.addEventListener('input', () => localStorage.setItem('cloud-tts-text', inputEl.value));
+  
   rateInput.addEventListener('input', (e) => {
-    rateVal.textContent = parseFloat(e.target.value).toFixed(1);
-    if(isPlaying) audioPlayer.playbackRate = parseFloat(e.target.value);
+    const val = e.target.value;
+    rateVal.textContent = parseFloat(val).toFixed(2);
+    localStorage.setItem('cloud-tts-rate', val); // 設定変更時に即保存
+    
+    // 再生中ならリアルタイムで反映
+    if(isPlaying && audioPlayer) {
+      audioPlayer.playbackRate = parseFloat(val);
+    }
   });
 
-  // --- 長文分割エンジン ---
+  // --- 長文分割処理 ---
   function splitText(text) {
-    // 句読点(。、！？)や改行で分割するが、デリミタも消さずに保持する
-    // Google APIは約200文字制限があるため、短く切る必要がある
     const rawChunks = text.split(/([。、\n\.\?!]+)/);
     let chunks = [];
     let buffer = "";
-
-    // 分割された破片を、程よい長さ（100文字以内）に結合し直す
     for (let part of rawChunks) {
       if (buffer.length + part.length < 100) {
         buffer += part;
@@ -132,12 +135,10 @@
       }
     }
     if (buffer) chunks.push(buffer);
-    
-    // 空白のみの要素を除去
     return chunks.filter(c => c.trim().length > 0);
   }
 
-  // --- 再生ロジック (再帰的処理) ---
+  // --- 再生コアロジック ---
   function playNextChunk() {
     if (currentChunkIndex >= chunkQueue.length || !isPlaying) {
       finishPlayback();
@@ -148,39 +149,41 @@
     statusEl.textContent = `再生中 (${currentChunkIndex + 1}/${chunkQueue.length})...`;
     statusEl.classList.add('active');
 
-    // Google API URL生成 (No-Referrer環境で動作確認済み)
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ja&client=tw-ob`;
     
     audioPlayer.src = url;
-    audioPlayer.playbackRate = parseFloat(rateInput.value); // 速度適用
-    audioPlayer.load(); // ロード開始
-
-    // 再生開始
-    audioPlayer.play().catch(e => {
-      console.error(e);
-      statusEl.textContent = "エラー: 再生がブロックされました";
-      isPlaying = false;
-    });
+    
+    // 【修正ポイント】
+    // srcを変更すると速度が1.0にリセットされるため、
+    // "メタデータ読み込み完了"のタイミングで、再度速度を強制設定する
+    audioPlayer.onloadedmetadata = function() {
+        const currentRate = parseFloat(rateInput.value);
+        audioPlayer.playbackRate = currentRate;
+        audioPlayer.play().catch(e => {
+            console.error(e);
+            statusEl.textContent = "ブロックされました。もう一度押してください";
+            isPlaying = false;
+        });
+    };
   }
 
-  // 音声終了時のイベント（次へ）
+  // 次の音声へ
   audioPlayer.onended = function() {
     currentChunkIndex++;
     playNextChunk();
   };
 
-  // エラー時のイベント（スキップして次へ）
   audioPlayer.onerror = function() {
-    console.warn("Skipping chunk due to error");
+    console.warn("Error skipping chunk");
     currentChunkIndex++;
     playNextChunk();
   };
 
+  // --- ボタン操作 ---
   function startPlayback() {
     const text = inputEl.value;
     if (!text) return;
 
-    // リセット
     isPlaying = true;
     chunkQueue = splitText(text);
     currentChunkIndex = 0;
@@ -198,24 +201,20 @@
     statusEl.textContent = "完了";
     statusEl.classList.remove('active');
     btnPlay.disabled = false;
-    btnStop.disabled = true; // 停止ボタンは無効化
+    btnStop.disabled = true;
   }
 
   function stopPlayback() {
     isPlaying = false;
     audioPlayer.pause();
-    audioPlayer.currentTime = 0;
     statusEl.textContent = "停止しました";
     statusEl.classList.remove('active');
     btnPlay.disabled = false;
     btnStop.disabled = true;
   }
 
-  // --- イベントリスナ ---
   btnPlay.addEventListener('click', startPlayback);
   btnStop.addEventListener('click', stopPlayback);
-  
-  // 初期状態
   btnStop.disabled = true;
 
 })();
