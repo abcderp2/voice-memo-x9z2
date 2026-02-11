@@ -2,211 +2,364 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none';">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="theme-color" content="#212529">
 
-<title>Secure Voice Memo</title>
+<title>Pro Speech Engine</title>
 
 <style>
-  /* 2. 外部フォントを使用せず、システムフォントのみを使用（プライバシー保護と高速化） */
   :root {
-    --bg-color: #f4f6f8;
-    --text-color: #333;
-    --accent-color: #2c3e50;
-    --btn-primary: #0056b3;
-    --btn-danger: #bd2130;
+    --bg-color: #212529;
+    --card-bg: #2c3035;
+    --text-main: #e9ecef;
+    --text-sub: #adb5bd;
+    --accent: #339af0;
+    --danger: #fa5252;
+    --border: #495057;
   }
-  
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--bg-color);
-    color: var(--text-color);
+    color: var(--text-main);
+    margin: 0;
     padding: 20px;
-    max-width: 800px;
-    margin: 0 auto;
-    line-height: 1.6;
-  }
-
-  h1 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--accent-color); border-bottom: 2px solid #ddd; padding-bottom: 0.5rem; }
-
-  /* セキュリティリスクとなるiframe等は使用しない */
-  
-  #status-indicator {
-    font-weight: bold;
-    font-size: 0.9rem;
-    margin-bottom: 10px;
-    padding: 8px 12px;
-    border-radius: 4px;
-    background-color: #e9ecef;
-    display: inline-block;
-  }
-
-  textarea {
-    width: 100%;
-    height: 40vh; /* 画面の高さの40% */
-    padding: 15px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    font-size: 16px; /* スマホでズームされないサイズ */
-    resize: vertical;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
     box-sizing: border-box;
   }
 
-  .controls {
+  h1 {
+    font-size: 1.2rem;
+    color: var(--text-sub);
+    margin: 0 0 20px 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 5px;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .control-panel {
+    background: var(--card-bg);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  /* テキストエリア */
+  textarea {
+    width: 100%;
+    height: 200px;
+    background-color: #343a40;
+    color: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 15px;
+    font-size: 16px; /* iOS zoom防止 */
+    line-height: 1.6;
+    resize: vertical;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+  /* 操作ボタン */
+  .btn-group {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 2fr 1fr;
     gap: 10px;
   }
 
   button {
     padding: 15px;
-    font-size: 1rem;
     border: none;
-    border-radius: 6px;
-    cursor: pointer;
+    border-radius: 8px;
     font-weight: bold;
-    transition: opacity 0.2s;
-    touch-action: manipulation; /* ダブルタップ防止 */
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    color: white;
+  }
+  button:active { transform: scale(0.98); }
+  
+  #btn-play { background: linear-gradient(135deg, #339af0, #1c7ed6); }
+  #btn-stop { background: var(--danger); opacity: 0.8; }
+  
+  button:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(100%); }
+
+  /* 設定項目 */
+  label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: var(--text-sub);
+    margin-bottom: 5px;
   }
 
-  button:active { opacity: 0.8; }
-  
-  #btn-start { background-color: var(--btn-primary); color: white; }
-  #btn-stop { background-color: var(--btn-danger); color: white; }
-  #btn-copy { background-color: #6c757d; color: white; }
-  
-  /* マイク使用中の視覚的フィードバック */
-  .recording {
-    background-color: #ffebee !important;
-    color: #c62828 !important;
-    border: 1px solid #ffcdd2;
-    animation: pulse 2s infinite;
+  select {
+    width: 100%;
+    padding: 10px;
+    background: #343a40;
+    color: white;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 1rem;
+    margin-bottom: 15px;
   }
 
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+  input[type=range] {
+    width: 100%;
+    margin-bottom: 15px;
+    cursor: pointer;
   }
+
+  /* ステータスバー */
+  #status-bar {
+    font-size: 0.8rem;
+    color: var(--accent);
+    text-align: center;
+    height: 20px;
+    font-weight: bold;
+  }
+
+  /* 読み上げ中のハイライト用（簡易的） */
+  .playing-overlay {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .playing-overlay.active { opacity: 1; }
+
 </style>
 </head>
 <body>
 
-<h1>音声メモ（Secure Mode）</h1>
+<h1>High-Perf TTS Engine</h1>
 
-<div id="status-indicator">待機中 - 安全な接続</div>
-<textarea id="transcript-area" placeholder="マイク権限を許可して開始を押してください..."></textarea>
+<div class="container">
+  
+  <div class="control-panel">
+    <label for="voice-select">ボイス選択 (Voice)</label>
+    <select id="voice-select"><option>読み込み中...</option></select>
 
-<div class="controls">
-  <button id="btn-start" type="button">開始</button>
-  <button id="btn-stop" type="button">停止</button>
-  <button id="btn-copy" type="button">コピー</button>
+    <label>速度 (Speed): <span id="rate-val">1.0</span></label>
+    <input type="range" id="rate" min="0.5" max="3" value="1.0" step="0.1">
+
+    <label>高さ (Pitch): <span id="pitch-val">1.0</span></label>
+    <input type="range" id="pitch" min="0.1" max="2" value="1.0" step="0.1">
+  </div>
+
+  <textarea id="text-input" placeholder="ここに読み上げさせたい文章を入力してください。自動で保存されます。">ここに文字を入力すると、あなたのスマホが高性能な読み上げ機になります。長文でも途中で止まらないように設計されています。</textarea>
+
+  <div class="btn-group">
+    <button id="btn-play">再生 (PLAY)</button>
+    <button id="btn-stop">停止 (STOP)</button>
+  </div>
+
+  <div id="status-bar">Ready</div>
 </div>
+
+<div id="overlay" class="playing-overlay">再生中...</div>
 
 <script>
 (function() {
-  'use strict'; // 厳格モードの適用
+  'use strict';
 
-  // DOM要素の取得
-  const startBtn = document.getElementById('btn-start');
-  const stopBtn = document.getElementById('btn-stop');
-  const copyBtn = document.getElementById('btn-copy');
-  const textArea = document.getElementById('transcript-area');
-  const statusDiv = document.getElementById('status-indicator');
+  // --- 変数定義 ---
+  const synth = window.speechSynthesis;
+  const inputEl = document.getElementById('text-input');
+  const voiceSelect = document.getElementById('voice-select');
+  const rateInput = document.getElementById('rate');
+  const pitchInput = document.getElementById('pitch');
+  const btnPlay = document.getElementById('btn-play');
+  const btnStop = document.getElementById('btn-stop');
+  const statusEl = document.getElementById('status-bar');
+  const overlay = document.getElementById('overlay');
+  
+  // 状態管理
+  let isPlaying = false;
+  let utteranceQueue = []; // 長文分割用キュー
+  let currentUtterance = null;
+  let textChunks = [];
+  let currentChunkIndex = 0;
 
-  let recognition = null;
-
-  // Web Speech APIの初期化
-  if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-
-    // イベントリスナの設定
-    recognition.onstart = function() {
-      updateStatus('● 録音中', true);
-    };
-
-    recognition.onend = function() {
-      updateStatus('待機中', false);
-    };
-
-    recognition.onresult = function(event) {
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + '\n';
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      // XSS対策: innerHTMLを使わず、valueプロパティへの代入のみを行う
-      // これにより、もし音声入力で「<script>...」と認識されてもコードは実行されない
-      if (finalTranscript) {
-        // 現在のカーソル位置に挿入するのではなく、末尾に追加（最も安全な実装）
-        textArea.value += finalTranscript;
-        // 自動スクロール
-        textArea.scrollTop = textArea.scrollHeight;
-      }
-    };
-
-    recognition.onerror = function(event) {
-      console.error('Speech recognition error', event.error);
-      updateStatus('エラー: ' + event.error, false);
-    };
-  } else {
-    updateStatus('このブラウザは非対応です', false);
-    startBtn.disabled = true;
+  // --- 初期化処理 (LocalStorage読み込み) ---
+  if (localStorage.getItem('tts-text')) {
+    inputEl.value = localStorage.getItem('tts-text');
   }
 
-  // ボタン操作のバインディング
-  startBtn.addEventListener('click', function() {
-    if (recognition) {
-      try { recognition.start(); } catch(e) { console.log('Already started'); }
-    }
+  // テキスト保存 (自動保存)
+  inputEl.addEventListener('input', () => {
+    localStorage.setItem('tts-text', inputEl.value);
   });
 
-  stopBtn.addEventListener('click', function() {
-    if (recognition) recognition.stop();
-  });
+  // スライダー数値表示更新
+  rateInput.addEventListener('input', (e) => document.getElementById('rate-val').textContent = e.target.value);
+  pitchInput.addEventListener('input', (e) => document.getElementById('pitch-val').textContent = e.target.value);
 
-  copyBtn.addEventListener('click', function() {
-    // Clipboard APIの使用（execCommandよりセキュアで推奨される方法）
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(textArea.value).then(function() {
-        const originalText = copyBtn.textContent;
-        copyBtn.textContent = '完了!';
-        setTimeout(() => copyBtn.textContent = originalText, 1000);
-      }).catch(function(err) {
-        console.error('Copy failed', err);
-        alert('コピーに失敗しました');
-      });
-    } else {
-      textArea.select();
-      document.execCommand('copy');
-    }
-  });
 
-  // 状態表示の更新関数（XSS対策のためtextContentを使用）
-  function updateStatus(text, isRecording) {
-    statusDiv.textContent = text;
-    if (isRecording) {
-      statusDiv.classList.add('recording');
-    } else {
-      statusDiv.classList.remove('recording');
+  // --- 音声リストの取得と生成 ---
+  let voices = [];
+  
+  function populateVoices() {
+    voices = synth.getVoices();
+    voiceSelect.innerHTML = '';
+
+    // 日本語を優先してソート
+    voices.sort((a, b) => {
+        const aJa = a.lang.includes('ja') ? 1 : 0;
+        const bJa = b.lang.includes('ja') ? 1 : 0;
+        return bJa - aJa;
+    });
+
+    voices.forEach((voice, index) => {
+      const option = document.createElement('option');
+      option.textContent = `${voice.name} (${voice.lang})`;
+      option.setAttribute('data-lang', voice.lang);
+      option.setAttribute('data-name', voice.name);
+      
+      // デフォルト選択（日本語の最初のもの）
+      if (index === 0) option.selected = true;
+      voiceSelect.appendChild(option);
+    });
+
+    if (voices.length === 0) {
+      const option = document.createElement('option');
+      option.textContent = "音声が見つかりません (ロード中)";
+      voiceSelect.appendChild(option);
     }
   }
+
+  populateVoices();
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = populateVoices;
+  }
+
+  // --- 再生エンジン (長文対応コアロジック) ---
+  
+  function splitText(text) {
+    // 句読点や改行で分割するが、デリミタ自体も残す正規表現
+    // 50文字程度で強制的に切る処理も入れたいが、まずは自然な区切りで
+    return text.split(/([。、\n\.\?!]+)/).reduce((acc, curr, i) => {
+      if (i % 2 === 0) {
+        // 文章部分
+        if (curr.length > 0) acc.push(curr);
+      } else {
+        // 区切り文字部分（前の文章にくっつける）
+        if (acc.length > 0) acc[acc.length - 1] += curr;
+      }
+      return acc;
+    }, []);
+  }
+
+  function playNextChunk() {
+    if (currentChunkIndex >= textChunks.length || !isPlaying) {
+      finishPlayback();
+      return;
+    }
+
+    const chunkText = textChunks[currentChunkIndex];
+    if (!chunkText.trim()) {
+      currentChunkIndex++;
+      playNextChunk();
+      return;
+    }
+
+    // 発話オブジェクト作成
+    const utterThis = new SpeechSynthesisUtterance(chunkText);
+    
+    // 設定適用
+    const selectedOption = voiceSelect.selectedOptions[0];
+    if (selectedOption) {
+        const selectedName = selectedOption.getAttribute('data-name');
+        const foundVoice = voices.find(v => v.name === selectedName);
+        if (foundVoice) utterThis.voice = foundVoice;
+    }
+    
+    utterThis.rate = parseFloat(rateInput.value);
+    utterThis.pitch = parseFloat(pitchInput.value);
+    
+    // イベントハンドラ
+    utterThis.onend = function() {
+      currentChunkIndex++;
+      // iOSなどのガベージコレクション対策として少し遅延させる
+      setTimeout(playNextChunk, 0); 
+    };
+
+    utterThis.onerror = function(e) {
+      console.error('TTS Error:', e);
+      // エラーでも次へ進む努力をする
+      currentChunkIndex++;
+      setTimeout(playNextChunk, 100);
+    };
+
+    // グローバル変数に退避（ガベージコレクションで音声が途切れるバグ対策）
+    currentUtterance = utterThis;
+
+    statusEl.textContent = `再生中 (${currentChunkIndex + 1}/${textChunks.length})`;
+    synth.speak(utterThis);
+  }
+
+  function startPlayback() {
+    // 既存の再生をキャンセル
+    synth.cancel();
+    isPlaying = true;
+    
+    const text = inputEl.value;
+    // 長文分割処理
+    textChunks = splitText(text);
+    
+    // 分割がうまくいかない（短い）場合はそのまま
+    if (textChunks.length === 0) textChunks = [text];
+
+    currentChunkIndex = 0;
+    
+    btnPlay.disabled = true;
+    overlay.classList.add('active');
+    
+    playNextChunk();
+  }
+
+  function finishPlayback() {
+    isPlaying = false;
+    statusEl.textContent = '完了';
+    btnPlay.disabled = false;
+    overlay.classList.remove('active');
+    currentUtterance = null;
+  }
+
+  function stopPlayback() {
+    isPlaying = false;
+    synth.cancel();
+    statusEl.textContent = '停止';
+    btnPlay.disabled = false;
+    overlay.classList.remove('active');
+  }
+
+  // --- イベントリスナ ---
+  btnPlay.addEventListener('click', startPlayback);
+  btnStop.addEventListener('click', stopPlayback);
 
 })();
 </script>
