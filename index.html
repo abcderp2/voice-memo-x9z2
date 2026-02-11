@@ -3,38 +3,85 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simple Voice</title>
+<title>Final Check</title>
 <style>
-  body { font-size: 16px; padding: 20px; font-family: sans-serif; }
-  textarea { width: 100%; height: 150px; font-size: 16px; margin-bottom: 20px; border: 1px solid #ccc; }
-  button { width: 100%; padding: 20px; font-size: 18px; background: #007aff; color: white; border: none; border-radius: 8px; font-weight: bold; }
+  body { 
+    font-family: sans-serif; padding: 20px; 
+    transition: background-color 0.2s; /* 色の変化をアニメーション */
+  }
+  
+  /* 再生中は画面が赤くなる */
+  body.speaking { background-color: #ffcccc; }
+
+  textarea { width: 100%; height: 100px; font-size: 16px; margin-bottom: 20px; }
+  
+  button { 
+    width: 100%; padding: 30px; font-size: 20px; 
+    background: #007aff; color: white; border: none; border-radius: 8px; font-weight: bold; 
+  }
+  
+  #log { margin-top: 20px; color: red; font-weight: bold; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 
-<textarea id="txt">テストです。これが喋れば成功です。</textarea>
-<button onclick="speak()">再生 (Play)</button>
+<h3>最終診断</h3>
+<textarea id="txt">あいうえお。聞こえますか？</textarea>
+<button id="btn" onclick="speak()">再生 (押すと赤くなります)</button>
+<div id="log"></div>
 
 <script>
-  function speak() {
-    // 1. まずエンジンをリセット（iOSで必須の儀式）
-    window.speechSynthesis.cancel();
+  // 音声データを消されないように外に出す（最重要）
+  window.utterance = null;
 
-    // 2. テキストを取得
+  function speak() {
+    const log = document.getElementById('log');
+    const btn = document.getElementById('btn');
     const text = document.getElementById('txt').value;
     
-    // 3. 発話データを作成
-    const u = new SpeechSynthesisUtterance(text);
+    // ログをリセット
+    log.textContent = "処理開始...";
     
-    // 4. 設定は「言語」のみ（他は全てOS任せにする）
-    u.lang = 'ja-JP'; 
-    u.rate = 1.0; // 標準速度
-    
-    // 5. 声質の指定をしない（これが重要）
-    // 特定の声を指定するとエラーになりやすいため、スマホが「一番出しやすい声」を勝手に選ばせる
+    // 1. 強制リセット
+    window.speechSynthesis.cancel();
 
-    // 6. 再生
-    window.speechSynthesis.speak(u);
+    // 2. データ作成
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP';
+    u.rate = 1.0;
+    u.volume = 1.0;
+
+    // 3. データをウィンドウに固定（消滅防止）
+    window.utterance = u;
+
+    // 4. イベント設定（視覚的な変化をつける）
+    u.onstart = function() {
+      document.body.classList.add('speaking'); // 背景を赤くする
+      btn.textContent = "再生中...（音量上げて！）";
+      log.textContent += "\n[成功] 再生開始シグナル受信";
+    };
+
+    u.onend = function() {
+      document.body.classList.remove('speaking'); // 元に戻す
+      btn.textContent = "再生 (押すと赤くなります)";
+      log.textContent += "\n[完了] 正常に終了";
+    };
+
+    u.onerror = function(e) {
+      document.body.classList.remove('speaking');
+      btn.textContent = "エラー発生";
+      // エラー内容を画面に出す
+      log.textContent += "\n[エラー] " + e.error;
+      alert("エラー: " + e.error);
+    };
+
+    // 5. 再生実行
+    try {
+      window.speechSynthesis.speak(u);
+      log.textContent += "\n命令送信完了...";
+    } catch (err) {
+      log.textContent += "\n[例外] " + err.message;
+    }
   }
 </script>
 
