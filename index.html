@@ -3,106 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Online Voice Player</title>
+
+<meta name="referrer" content="no-referrer">
+
+<title>Final Audio Player</title>
 <style>
-  body {
-    background-color: #222;
-    color: #fff;
-    font-family: sans-serif;
-    padding: 20px;
-    text-align: center;
-  }
-  h2 { color: #aaa; font-size: 16px; margin-bottom: 20px; }
+  body { background: #111; color: white; font-family: sans-serif; padding: 20px; text-align: center; }
+  textarea { width: 100%; height: 100px; font-size: 16px; padding: 10px; margin-bottom: 20px; }
   
-  textarea {
-    width: 100%;
-    height: 120px;
-    padding: 15px;
-    font-size: 18px;
-    border-radius: 10px;
-    border: none;
-    margin-bottom: 20px;
-    box-sizing: border-box;
-    font-family: inherit;
-  }
-
   button {
-    width: 100%;
-    padding: 25px;
-    font-size: 20px;
-    font-weight: bold;
-    color: white;
-    background: linear-gradient(135deg, #ff00cc, #333399); /* 派手なボタン */
-    border: none;
-    border-radius: 50px;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    transition: transform 0.1s;
+    width: 100%; padding: 20px; font-size: 18px; font-weight: bold;
+    color: white; border: none; border-radius: 10px; margin-bottom: 10px; cursor: pointer;
   }
-  button:active { transform: scale(0.95); }
-
-  #status {
-    margin-top: 20px;
-    font-size: 14px;
-    color: #ffcc00;
-    min-height: 20px;
-  }
+  
+  #btn-play { background: #007aff; }
+  #btn-force { background: #ff9500; display: none; /* 最初は隠しておく */ }
+  
+  #status { color: #ffcc00; margin-top: 10px; min-height: 20px; }
 </style>
 </head>
 <body>
 
-<h2>クラウド音声再生 (Google Translate API)</h2>
+<h3>最終手段プレイヤー</h3>
+<textarea id="txt">テストです。身元を隠して再生します。</textarea>
 
-<textarea id="txt">こんにちは。タブレットの中に機能がなくても、ネット経由なら喋れます。</textarea>
-
-<button onclick="playOnline()">▶ 再生する</button>
+<button id="btn-play" onclick="tryPlay()">① その場で再生</button>
+<button id="btn-force" onclick="forcePlay()">② 新しいタブで再生 (強力)</button>
 
 <div id="status"></div>
 
 <script>
-  function playOnline() {
+  function getUrl() {
     const text = document.getElementById('txt').value;
+    // Google翻訳API (client=tw-ob は一般公開用)
+    return `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ja&client=tw-ob`;
+  }
+
+  function tryPlay() {
     const status = document.getElementById('status');
-    const btn = document.querySelector('button');
+    const btnForce = document.getElementById('btn-force');
+    const url = getUrl();
 
-    if(!text) return;
+    status.textContent = "接続中...";
 
-    // ユーザーへのフィードバック
-    status.textContent = "🌍 ネットから音声を受信中...";
-    btn.disabled = true;
-    btn.style.opacity = 0.7;
-
-    // Google翻訳の音声サーバーURLを作成
-    // client=tw-ob は一般公開されているGoogleのテスト用APIエンドポイントです
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ja&client=tw-ob`;
-
-    // 音楽ファイル(MP3)として再生
-    // これなら「音声合成エンジン」は不要。「動画再生機能」だけで動く。
     const audio = new Audio(url);
-
+    
+    // 再生成功時
     audio.onplay = () => {
-      status.textContent = "🔊 再生中 (MP3)";
+      status.textContent = "🔊 再生成功！";
     };
 
-    audio.onended = () => {
-      status.textContent = "✅ 完了";
-      btn.disabled = false;
-      btn.style.opacity = 1;
-    };
-
+    // 失敗時（ブロックされた時）
     audio.onerror = (e) => {
-      status.textContent = "❌ 通信エラー（Wi-Fiを確認してください）";
-      btn.disabled = false;
-      btn.style.opacity = 1;
-      alert("再生できませんでした。ネットに繋がっていますか？");
+      status.textContent = "❌ ブロックされました。「ボタン②」を押してください！";
+      // 失敗したら「強制再生ボタン」を表示する
+      btnForce.style.display = "block"; 
+      alert("このタブレットでは直接再生できませんでした。\n新しく出た「オレンジ色のボタン」を押してください。");
     };
 
     // 再生実行
     audio.play().catch(e => {
-      status.textContent = "❌ ブラウザがブロックしました";
-      alert("再生ボタンをもう一度強く押してください！");
-      btn.disabled = false;
+      status.textContent = "❌ 権限エラー。「ボタン②」を使ってください。";
+      btnForce.style.display = "block";
     });
+  }
+
+  function forcePlay() {
+    // 新しいタブで開く（これはブラウザもブロックできない）
+    const url = getUrl();
+    window.open(url, '_blank');
   }
 </script>
 
