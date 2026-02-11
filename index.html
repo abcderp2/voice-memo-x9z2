@@ -2,78 +2,223 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' https://translate.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none';">
 
 <meta name="referrer" content="no-referrer">
 
-<title>Final Audio Player</title>
+<title>Cloud Voice Pro</title>
+
 <style>
-  body { background: #111; color: white; font-family: sans-serif; padding: 20px; text-align: center; }
-  textarea { width: 100%; height: 100px; font-size: 16px; padding: 10px; margin-bottom: 20px; }
+  :root { --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --accent: #0a84ff; --danger: #ff453a; }
+  
+  body {
+    background-color: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 20px;
+    display: flex; flex-direction: column; height: 100vh; box-sizing: border-box;
+  }
+
+  h1 { font-size: 1rem; color: #666; text-align: center; margin: 0 0 15px 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
+
+  /* 操作パネル */
+  .panel {
+    background: var(--card); padding: 15px; border-radius: 12px;
+    margin-bottom: 15px; border: 1px solid #333;
+  }
+
+  .slider-group { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+  input[type=range] { flex-grow: 1; margin-left: 15px; cursor: pointer; }
+
+  /* テキストエリア */
+  textarea {
+    flex-grow: 1; width: 100%;
+    background: #1c1c1e; color: #fff;
+    border: 1px solid #333; border-radius: 10px;
+    padding: 15px; font-size: 17px; line-height: 1.6;
+    resize: none; box-sizing: border-box; margin-bottom: 15px;
+    font-family: inherit;
+  }
+  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+  /* ボタン */
+  .btn-group { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
   
   button {
-    width: 100%; padding: 20px; font-size: 18px; font-weight: bold;
-    color: white; border: none; border-radius: 10px; margin-bottom: 10px; cursor: pointer;
+    padding: 16px; border: none; border-radius: 12px;
+    font-size: 16px; font-weight: bold; cursor: pointer;
+    color: white; transition: opacity 0.2s;
   }
-  
-  #btn-play { background: #007aff; }
-  #btn-force { background: #ff9500; display: none; /* 最初は隠しておく */ }
-  
-  #status { color: #ffcc00; margin-top: 10px; min-height: 20px; }
+  button:active { opacity: 0.7; }
+  button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  #btn-play { background: var(--accent); }
+  #btn-stop { background: var(--danger); }
+
+  /* ステータスバー */
+  #status { 
+    text-align: center; font-size: 13px; color: #888; margin-top: 10px; min-height: 20px; 
+  }
+  .active { color: #30d158 !important; }
+
 </style>
 </head>
 <body>
 
-<h3>最終手段プレイヤー</h3>
-<textarea id="txt">テストです。身元を隠して再生します。</textarea>
+<h1>CLOUD VOICE PRO</h1>
 
-<button id="btn-play" onclick="tryPlay()">① その場で再生</button>
-<button id="btn-force" onclick="forcePlay()">② 新しいタブで再生 (強力)</button>
+<div class="panel">
+  <div class="slider-group">
+    <span>速度 (Speed): <span id="rate-val">1.0</span></span>
+    <input type="range" id="rate" min="0.5" max="2.0" step="0.25" value="1.0">
+  </div>
+</div>
 
-<div id="status"></div>
+<textarea id="text-input" placeholder="ここに長文を入力しても大丈夫です。自動的に分割してクラウドで再生します。">ここに文字を入力してください。このツールはあなたのタブレットの代わりに、Googleのサーバーを使って音声を再生します。</textarea>
+
+<div class="btn-group">
+  <button id="btn-play">再生 (PLAY)</button>
+  <button id="btn-stop">停止 (STOP)</button>
+</div>
+
+<div id="status">Ready</div>
 
 <script>
-  function getUrl() {
-    const text = document.getElementById('txt').value;
-    // Google翻訳API (client=tw-ob は一般公開用)
-    return `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ja&client=tw-ob`;
+(function() {
+  'use strict';
+
+  // --- 変数定義 ---
+  const inputEl = document.getElementById('text-input');
+  const btnPlay = document.getElementById('btn-play');
+  const btnStop = document.getElementById('btn-stop');
+  const statusEl = document.getElementById('status');
+  const rateInput = document.getElementById('rate');
+  const rateVal = document.getElementById('rate-val');
+
+  let audioPlayer = new Audio();
+  let chunkQueue = []; // 文章の待ち行列
+  let isPlaying = false;
+  let currentChunkIndex = 0;
+
+  // --- 初期化処理 ---
+  // 自動保存の復元
+  if(localStorage.getItem('cloud-tts-text')) {
+    inputEl.value = localStorage.getItem('cloud-tts-text');
+  }
+  inputEl.addEventListener('input', () => localStorage.setItem('cloud-tts-text', inputEl.value));
+
+  // 速度表示の更新
+  rateInput.addEventListener('input', (e) => {
+    rateVal.textContent = parseFloat(e.target.value).toFixed(1);
+    if(isPlaying) audioPlayer.playbackRate = parseFloat(e.target.value);
+  });
+
+  // --- 長文分割エンジン ---
+  function splitText(text) {
+    // 句読点(。、！？)や改行で分割するが、デリミタも消さずに保持する
+    // Google APIは約200文字制限があるため、短く切る必要がある
+    const rawChunks = text.split(/([。、\n\.\?!]+)/);
+    let chunks = [];
+    let buffer = "";
+
+    // 分割された破片を、程よい長さ（100文字以内）に結合し直す
+    for (let part of rawChunks) {
+      if (buffer.length + part.length < 100) {
+        buffer += part;
+      } else {
+        if (buffer) chunks.push(buffer);
+        buffer = part;
+      }
+    }
+    if (buffer) chunks.push(buffer);
+    
+    // 空白のみの要素を除去
+    return chunks.filter(c => c.trim().length > 0);
   }
 
-  function tryPlay() {
-    const status = document.getElementById('status');
-    const btnForce = document.getElementById('btn-force');
-    const url = getUrl();
+  // --- 再生ロジック (再帰的処理) ---
+  function playNextChunk() {
+    if (currentChunkIndex >= chunkQueue.length || !isPlaying) {
+      finishPlayback();
+      return;
+    }
 
-    status.textContent = "接続中...";
+    const text = chunkQueue[currentChunkIndex];
+    statusEl.textContent = `再生中 (${currentChunkIndex + 1}/${chunkQueue.length})...`;
+    statusEl.classList.add('active');
 
-    const audio = new Audio(url);
+    // Google API URL生成 (No-Referrer環境で動作確認済み)
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ja&client=tw-ob`;
     
-    // 再生成功時
-    audio.onplay = () => {
-      status.textContent = "🔊 再生成功！";
-    };
+    audioPlayer.src = url;
+    audioPlayer.playbackRate = parseFloat(rateInput.value); // 速度適用
+    audioPlayer.load(); // ロード開始
 
-    // 失敗時（ブロックされた時）
-    audio.onerror = (e) => {
-      status.textContent = "❌ ブロックされました。「ボタン②」を押してください！";
-      // 失敗したら「強制再生ボタン」を表示する
-      btnForce.style.display = "block"; 
-      alert("このタブレットでは直接再生できませんでした。\n新しく出た「オレンジ色のボタン」を押してください。");
-    };
-
-    // 再生実行
-    audio.play().catch(e => {
-      status.textContent = "❌ 権限エラー。「ボタン②」を使ってください。";
-      btnForce.style.display = "block";
+    // 再生開始
+    audioPlayer.play().catch(e => {
+      console.error(e);
+      statusEl.textContent = "エラー: 再生がブロックされました";
+      isPlaying = false;
     });
   }
 
-  function forcePlay() {
-    // 新しいタブで開く（これはブラウザもブロックできない）
-    const url = getUrl();
-    window.open(url, '_blank');
-  }
-</script>
+  // 音声終了時のイベント（次へ）
+  audioPlayer.onended = function() {
+    currentChunkIndex++;
+    playNextChunk();
+  };
 
+  // エラー時のイベント（スキップして次へ）
+  audioPlayer.onerror = function() {
+    console.warn("Skipping chunk due to error");
+    currentChunkIndex++;
+    playNextChunk();
+  };
+
+  function startPlayback() {
+    const text = inputEl.value;
+    if (!text) return;
+
+    // リセット
+    isPlaying = true;
+    chunkQueue = splitText(text);
+    currentChunkIndex = 0;
+    
+    if (chunkQueue.length === 0) return;
+
+    btnPlay.disabled = true;
+    btnStop.disabled = false;
+    
+    playNextChunk();
+  }
+
+  function finishPlayback() {
+    isPlaying = false;
+    statusEl.textContent = "完了";
+    statusEl.classList.remove('active');
+    btnPlay.disabled = false;
+    btnStop.disabled = true; // 停止ボタンは無効化
+  }
+
+  function stopPlayback() {
+    isPlaying = false;
+    audioPlayer.pause();
+    audioPlayer.currentTime = 0;
+    statusEl.textContent = "停止しました";
+    statusEl.classList.remove('active');
+    btnPlay.disabled = false;
+    btnStop.disabled = true;
+  }
+
+  // --- イベントリスナ ---
+  btnPlay.addEventListener('click', startPlayback);
+  btnStop.addEventListener('click', stopPlayback);
+  
+  // 初期状態
+  btnStop.disabled = true;
+
+})();
+</script>
 </body>
 </html>
