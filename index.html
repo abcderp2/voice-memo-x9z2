@@ -2,247 +2,41 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none';">
-<meta name="referrer" content="no-referrer">
-
-<title>Ultimate Voice</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Voice</title>
 <style>
-  :root { --bg: #000000; --card: #1c1c1e; --text: #f2f2f7; --accent: #0a84ff; --danger: #ff453a; --success: #30d158; }
-  
-  body {
-    background-color: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    margin: 0; padding: 20px;
-    display: flex; flex-direction: column; height: 100vh; box-sizing: border-box;
-  }
-
-  h1 { font-size: 1rem; color: #8e8e93; margin: 0 0 15px 0; text-align: center; letter-spacing: 1px; }
-
-  /* 操作パネル */
-  .panel {
-    background: var(--card); padding: 15px; border-radius: 14px;
-    margin-bottom: 15px; border: 1px solid #333;
-  }
-
-  /* テキストエリア */
-  textarea {
-    width: 100%; flex-grow: 1;
-    background: #1c1c1e; color: #fff;
-    border: 1px solid #333; border-radius: 10px;
-    padding: 15px; font-size: 17px; line-height: 1.5;
-    resize: none; box-sizing: border-box; margin-bottom: 15px;
-    font-family: inherit;
-  }
-  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
-
-  /* コントロール */
-  select {
-    width: 100%; padding: 12px; background: #2c2c2e; color: #fff;
-    border: none; border-radius: 8px; font-size: 16px; margin-bottom: 15px;
-    appearance: none; -webkit-appearance: none;
-  }
-  
-  .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
-  
-  button {
-    padding: 16px; border: none; border-radius: 12px;
-    font-size: 16px; font-weight: bold; cursor: pointer;
-    transition: opacity 0.2s;
-  }
-  button:active { opacity: 0.6; }
-
-  #btn-play { background: var(--accent); color: white; }
-  #btn-stop { background: var(--danger); color: white; }
-  #btn-reset { background: #3a3a3c; color: #aaa; width: 100%; padding: 10px; font-size: 12px; }
-
-  /* ステータス */
-  #status { 
-    text-align: center; font-size: 13px; color: #8e8e93; min-height: 20px; 
-    white-space: pre-wrap; word-break: break-all;
-  }
-  .error-msg { color: var(--danger) !important; }
-  .success-msg { color: var(--success) !important; }
-
+  body { font-size: 16px; padding: 20px; font-family: sans-serif; }
+  textarea { width: 100%; height: 150px; font-size: 16px; margin-bottom: 20px; border: 1px solid #ccc; }
+  button { width: 100%; padding: 20px; font-size: 18px; background: #007aff; color: white; border: none; border-radius: 8px; font-weight: bold; }
 </style>
 </head>
 <body>
 
-<h1>ULTIMATE TTS ENGINE v5</h1>
-
-<div class="panel">
-  <select id="voice-select"><option value="">システム標準 (Default)</option></select>
-  <div style="display:flex; justify-content:space-between; font-size:12px; color:#888; margin-bottom:5px;">
-    <span>速度 (Speed)</span><span>1.0</span>
-  </div>
-  <input type="range" id="rate" min="0.5" max="1.5" step="0.1" value="1.0" style="width:100%;">
-</div>
-
-<textarea id="text-input" placeholder="ここに入力してください...">テスト再生です。この音声が聞こえれば成功です。</textarea>
-
-<div class="btn-group">
-  <button id="btn-play">再生 (PLAY)</button>
-  <button id="btn-stop">停止 (STOP)</button>
-</div>
-
-<button id="btn-reset">⚠️ 音声エンジン強制リセット (Fix Error)</button>
-
-<div id="status">Ready</div>
+<textarea id="txt">テストです。これが喋れば成功です。</textarea>
+<button onclick="speak()">再生 (Play)</button>
 
 <script>
-(function() {
-  'use strict';
+  function speak() {
+    // 1. まずエンジンをリセット（iOSで必須の儀式）
+    window.speechSynthesis.cancel();
 
-  const synth = window.speechSynthesis;
-  const inputEl = document.getElementById('text-input');
-  const btnPlay = document.getElementById('btn-play');
-  const btnStop = document.getElementById('btn-stop');
-  const btnReset = document.getElementById('btn-reset');
-  const voiceSelect = document.getElementById('voice-select');
-  const statusEl = document.getElementById('status');
-  const rateInput = document.getElementById('rate');
-
-  // 【重要】GC対策：発話オブジェクトをグローバルに保持する変数
-  window.currentUtterance = null; 
-
-  // 初期化：ローカルストレージ復元
-  if(localStorage.getItem('tts-v5-text')) inputEl.value = localStorage.getItem('tts-v5-text');
-  inputEl.addEventListener('input', () => localStorage.setItem('tts-v5-text', inputEl.value));
-
-  // ログ表示
-  function setStatus(msg, type = '') {
-    statusEl.textContent = msg;
-    statusEl.className = type === 'error' ? 'error-msg' : (type === 'success' ? 'success-msg' : '');
-    console.log(`[TTS] ${msg}`);
-  }
-
-  // 音声リスト読み込み
-  let voices = [];
-  function loadVoices() {
-    voices = synth.getVoices();
-    if (voices.length > 0) {
-      // 既存の選択肢を保持しつつ更新
-      const currentVal = voiceSelect.value;
-      voiceSelect.innerHTML = '<option value="">システム標準 (自動選択)</option>';
-      
-      // 日本語のみフィルタリングして追加
-      voices.filter(v => v.lang.includes('ja') || v.lang.includes('JP')).forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v.name;
-        opt.textContent = `${v.name} (${v.lang})`;
-        voiceSelect.appendChild(opt);
-      });
-      
-      // 前回の選択を復元トライ
-      if (currentVal) voiceSelect.value = currentVal;
-      setStatus("音声リスト読み込み完了", "success");
-    }
-  }
-  
-  // iOS/Androidの両方のタイミングに対応
-  loadVoices();
-  if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
-  setTimeout(loadVoices, 500); // 念のための遅延実行
-
-  // --- 再生ロジック (エラー対策版) ---
-  function speak(forceDefault = false) {
-    // 1. まず確実に停止
-    synth.cancel();
+    // 2. テキストを取得
+    const text = document.getElementById('txt').value;
     
-    const text = inputEl.value;
-    if (!text) return setStatus("テキストが空です", "error");
-
-    // 2. 発話オブジェクト作成
+    // 3. 発話データを作成
     const u = new SpeechSynthesisUtterance(text);
     
-    // 3. 【重要】GC対策：グローバル変数に代入してメモリから消させない
-    window.currentUtterance = u; 
+    // 4. 設定は「言語」のみ（他は全てOS任せにする）
+    u.lang = 'ja-JP'; 
+    u.rate = 1.0; // 標準速度
+    
+    // 5. 声質の指定をしない（これが重要）
+    // 特定の声を指定するとエラーになりやすいため、スマホが「一番出しやすい声」を勝手に選ばせる
 
-    // 4. 音声設定
-    if (!forceDefault && voiceSelect.value) {
-      const voice = voices.find(v => v.name === voiceSelect.value);
-      if (voice) {
-        u.voice = voice;
-      } else {
-        u.lang = 'ja-JP'; // 見つからない場合
-      }
-    } else {
-      u.lang = 'ja-JP'; // 強制デフォルト（救済措置）
-      if (forceDefault) setStatus("標準音声で再試行中...", "error");
-    }
-
-    u.rate = parseFloat(rateInput.value);
-    u.pitch = 1.0;
-    u.volume = 1.0;
-
-    // 5. イベントハンドラ
-    u.onstart = () => {
-      setStatus("再生中...", "success");
-      btnPlay.disabled = true;
-      btnPlay.style.opacity = 0.5;
-    };
-
-    u.onend = () => {
-      setStatus("完了");
-      btnPlay.disabled = false;
-      btnPlay.style.opacity = 1.0;
-      window.currentUtterance = null; // メモリ解放
-    };
-
-    u.onerror = (e) => {
-      console.error(e);
-      // synthesis-failed などの致命的エラーの場合
-      if (e.error === 'synthesis-failed' || e.error === 'network') {
-        if (!forceDefault) {
-          // 【自動修復】一度だけ標準音声でリトライする
-          setStatus(`エラー発生(${e.error})。標準音声でリトライします...`, "error");
-          setTimeout(() => speak(true), 100);
-        } else {
-          setStatus(`致命的エラー: ${e.error}\n下の[強制リセット]を押してください`, "error");
-          btnPlay.disabled = false;
-          btnPlay.style.opacity = 1.0;
-        }
-      } else {
-        // user-canceledなどは無視
-        if (e.error !== 'canceled' && e.error !== 'interrupted') {
-             setStatus(`停止: ${e.error}`);
-        }
-        btnPlay.disabled = false;
-        btnPlay.style.opacity = 1.0;
-      }
-    };
-
-    // 6. 再生実行 (iOS対策でsetTimeoutを使わず直接実行)
-    try {
-      synth.speak(u);
-    } catch (err) {
-      setStatus(`例外エラー: ${err.message}`, "error");
-    }
+    // 6. 再生
+    window.speechSynthesis.speak(u);
   }
-
-  // --- ボタン操作 ---
-  btnPlay.addEventListener('click', () => speak(false));
-  
-  btnStop.addEventListener('click', () => {
-    synth.cancel();
-    setStatus("停止しました");
-    btnPlay.disabled = false;
-    btnPlay.style.opacity = 1.0;
-  });
-
-  // 強制リセットボタン（音声エンジンが固まった時用）
-  btnReset.addEventListener('click', () => {
-    synth.cancel();
-    window.currentUtterance = null;
-    setStatus("音声エンジンをリセットしました。\n再度[再生]を押してください。", "success");
-    // iOSのために空の再生を一瞬行ってエンジンを起こすハック
-    const u = new SpeechSynthesisUtterance('');
-    synth.speak(u); 
-  });
-
-})();
 </script>
+
 </body>
 </html>
